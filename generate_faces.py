@@ -11,20 +11,27 @@ import click
 # My location D:\SteamLibrary\steamapps\common\Crusader Kings III\binaries\ck3.exe
 def start_game(location):
     os.startfile(location)
+    time.sleep(45)  #it takes a while until the game starts...
     
 def end_game():
     subprocess.call(["taskkill", "-F", "/IM", "ck3.exe"])   #possibly parametrize the last element of the list
 
+def wait_and_click(pic_name, wait_in_sec=0.1, retry_in_sec=1):
+    time.sleep(wait_in_sec)
+    button_placement = pyautogui.locateOnScreen(pic_name, confidence=0.9)
+    while not button_placement:
+        print(f"{pic_name} not found. Retrying in {retry_in_sec} s.")
+        time.sleep(retry_in_sec)
+        button_placement = pyautogui.locateOnScreen(pic_name, confidence=0.9)
+    
+    button_center = pyautogui.center(button_placement)
+    pyautogui.click(button_center.x, button_center.y)
+    
+
 def click_through_the_menu():
-    time.sleep(30)
-    new_game_button = pyautogui.locateOnScreen('locate_pics/new_game.png', confidence=0.9)
-    print(new_game_button)
-    while not new_game_button:
-        print("New game button not found.Retrying in 1 second")
-        time.sleep(5)
-        new_game_button = pyautogui.locateOnScreen('locate_pics/new_game.png', confidence=0.9)
-    print(f"Success! New game button found! Where? {new_game_button}")
-        
+    click_new_game_button = lambda: wait_and_click('locate_pics/new_game.png')
+    
+    click_new_game_button()
         
     
 
@@ -73,7 +80,7 @@ def main(exec, n, dna_folder, faces_folder):
         screenshot_and_save_face(faces_folder, model_name)
     
     # time.sleep(15)
-    end_game()
+    # end_game()
 
 if __name__=="__main__":
     main()
