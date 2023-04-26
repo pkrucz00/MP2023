@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+
+import os
+import shutil
+import subprocess
+import time
+
+from datetime import datetime
+from pathlib import Path
+from random import randint
+
+import click
+import pyautogui
+import pyperclip
+
+MALE_TMP = "male_tmp.txt"
+FEMALE_TMP = "female_tmp.txt"
+
+
+def start_game(location):
+    # My location C:\Users\pawel\Documents\STUDIA\magisterka\ck3_debug.exe.lnk
+    os.startfile(location)
+    time.sleep(30)  #it takes a while until the game starts...
+    find_button("locate_pics/main_logo.png", 10)
+    
+    
+def end_game():
+    subprocess.call(["taskkill", "-F", "/IM", "ck3.exe"])   #possibly parametrize the last element of the list
+
+
+def safe_create_path(path: str) -> Path:
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def archive_folder(folder_name):
+    something = shutil.make_archive(base_name=folder_name, format="zip")
+    print(something)
+    
+
+def safe_click(coords, label=""):
+    wait_time = 0.0001
+    if (label): print(f"Clicking {label}")
+    
+    pyautogui.moveTo(coords.x, coords.y)
+    time.sleep(wait_time)
+    pyautogui.click()
+    
+
+def find_button(pic_name, retry_in_sec=1):
+    confidence = 0.9
+    
+    button_placement = pyautogui.locateOnScreen(pic_name, confidence=confidence)
+    while not button_placement:
+        print(f"{pic_name} not found. Retrying in {retry_in_sec} s.")
+        time.sleep(retry_in_sec)
+        button_placement = pyautogui.locateOnScreen(pic_name, confidence=confidence)
+    
+    return pyautogui.center(button_placement)
+
+    
+def find_button_and_click(pic_name, retry_in_sec=1, label=""):
+    button_center = find_button(pic_name, retry_in_sec=retry_in_sec)
+    safe_click(button_center, label=label)
+
+
+def save_dna(dna_text, out_path):
+    with open(out_path, "w", encoding="UTF-8") as out_file:
+        out_file.write(dna_text)
+    
+
+def copy_and_save_dna(output_path, copy_button_placement):
+    safe_click(copy_button_placement)
+    save_dna(pyperclip.paste(), output_path)
+        
+
+def click_to_the_portrait_mode(): 
+    pyautogui.click()
+    pyautogui.press("`") # close debug panel
+    find_button_and_click('locate_pics/portrait_editor.png', label="Portrait Editor", retry_in_sec=10)
+    pyautogui.press("`")  # close debug panel 
+
+
+def stabilize_heads(): #use value "1" in torso state input
+    find_button_and_click("locate_pics/torso_state.png", label="Torso_state")
+    pyautogui.write("1")
+    
+
+def prepare_initial_dna():
+    male_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_male.png")
+    female_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_female.png")
+    
+    find_button_and_click("locate_pics/randomize_dna.png", label="Random DNA")
+    copy_and_save_dna(MALE_TMP, male_copy_dna_pos)
+    copy_and_save_dna(FEMALE_TMP, female_copy_dna_pos)
+    
+    
+       
+def prepare():
+    click_to_the_portrait_mode()
+    stabilize_heads()     
+    prepare_initial_dna()        
+
+
+def read_lines_of_file(path):
+    with open(path, "r", encoding="UTF-8") as file:
+        return [line.strip("\n") for line in file.readlines()]
+
+
+"""
+example line:
+
+    gene_forehead_brow_height={ "forehead_brow_height_pos" 149 "forehead_brow_height_pos" 149 }
+
+Elements in line after split:
+0 - gene name
+1 - dom_gene
+2 - dom_gene_val  <- this value should be changed
+3 - rec_gene
+4 - rec_gene_val
+5 - end bracket
+"""
+def modify_value_of_a_gene(line, value):
+     DOM_GENE_VAL_POS = 2
+     splitted_line = line.split()
+     splitted_line[DOM_GENE_VAL_POS] = str(value) 
+     return " ".join(splitted_line)
+
+
+def modify_genes(dna_lines, list_of_genes_to_change):
+    print(list_of_genes_to_change)
+    result = []
+    for dna_line in dna_lines:
+        if any([gene in dna_line for gene in list_of_genes_to_change]):
+            new_gene_value = randint(0,255)
+            dna_line = modify_value_of_a_gene(dna_line, new_gene_value)
+            print(dna_line)
+        
+        result.append(dna_line)
+    return "\n".join(result)
+
+
+def screenshot_and_save_face(output_folder, model_name):
+    output_path=f"{output_folder}/{model_name}.png"
+    face_region = (666, 315, 280, 430)
+    pyautogui.screenshot(output_path, region=face_region)
+
+
+def copy_and_save_model(dna, model_name, output_folder):
+    save_dna(dna, f"{output_folder}/{model_name}.txt")
+    screenshot_and_save_face(output_folder, model_name)    
+    
+    
+def generate_face_with_limits(dna, limits, output_folder):
+    modified_genes = modify_genes(dna, limits)
+    pyperclip.copy(modified_genes)
+    model_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
+    find_button_and_click("locate_pics/paste_persistent_dna.png", 0.1, "paste dna")
+    copy_and_save_model(modified_genes, model_name, output_folder)
+
+
+def generate_faces_with_gene_limits(n, genes, out):
+    male_dna = read_lines_of_file(MALE_TMP)
+    female_dna = read_lines_of_file(FEMALE_TMP)
+    
+    for _ in range(n):
+        generate_face_with_limits(male_dna, genes, out)
+        generate_face_with_limits(female_dna, genes, out)
+
+
+
+@click.command()
+@click.option("--exec",
+              type=click.Path(dir_okay=False, file_okay=True, readable=True, exists=True),
+              help="Path to the CK III game. Make sure it is in debug mode.")
+@click.option("--genes",
+              type=click.Path(dir_okay=False, file_okay=True, exists=True),
+              help="File with a list of genes that should be randomized")
+@click.option("-n", default=10, help="Number of output pictures per ethnicity and per sex")
+@click.option("--out", type=click.Path(dir_okay=True, file_okay=False),
+                default="results",
+                help="Output folder for generated faces and dna files")
+@click.option("--zip", is_flag=True, default=False, help="Zip the results")
+def main(exec, genes, n, out, zip):
+    start_game(exec)
+    prepare()
+    
+    list_of_genes = read_lines_of_file(genes)
+    generate_faces_with_gene_limits(n, list_of_genes, out)
+    # delete_tmp_files()
+    if (zip): archive_folder(out)
+    end_game()
+
+if __name__=="__main__":
+    main()
