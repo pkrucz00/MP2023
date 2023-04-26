@@ -19,7 +19,6 @@ elif backends.mps.is_available():
     DEVICE = "mps"
 else:
     DEVICE = "cpu"
-DEVICE = "cpu"
 
 
 class FaceDetector:
@@ -46,8 +45,12 @@ def allign_faces(images: np.ndarray, detector: FaceDetector, labels: list[str], 
             return None
     
     alligned_images = [handle_no_face_detected(img, i) for i, img in tqdm(list(enumerate(images)))]
-    alligned_images, alligned_labels = zip(*[(img, label) for img, label in zip(alligned_images, labels) if img is not None])
-    return np.array(alligned_images), np.array(alligned_labels)
+    filtered_images, filtered_labels = zip(*[(img, label) for img, label in zip(alligned_images, labels) if img is not None])
+    if paths is not None:
+        filtered_paths = [path for path, img in zip(paths, alligned_images) if img is not None]
+        return np.array(filtered_images), np.array(filtered_labels), filtered_paths
+    
+    return np.array(filtered_images), np.array(filtered_labels)
 
 
 def get_embeddings(images: np.ndarray, model: th.nn.Module, batch_size: int=32, device: str=DEVICE) -> np.ndarray:
@@ -62,7 +65,7 @@ def get_embeddings(images: np.ndarray, model: th.nn.Module, batch_size: int=32, 
 
     embedddings = []
     for i in tqdm(range(0, images.shape[0], batch_size)):
-        batch = data[i:i+128].to(device)
+        batch = data[i:i+batch_size].to(device)
         embeddings = model(batch).detach()
         embedddings.append(embeddings)  
 

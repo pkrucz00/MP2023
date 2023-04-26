@@ -31,7 +31,6 @@ import utils.face_recognition as ufr
 )
 @click.option(
     "--model_type",
-    default="insightface",
     type=click.Choice(["insightface", "facenet"]),
     help="Type of the model to use for embeddings generation"
 )
@@ -48,6 +47,7 @@ def main(out: str, dataset_dir: str, weights: str | None, model_type: str, train
             print(f"Will evaluate facenet pretrained on {models_paths}")
         if weights is not None:
             warnings.warn("Weights are ignored for facenet model")
+
     elif model_type == "insightface":
         if weights is None:
             raise ValueError("InsightFace model requires weights directory to be specified")
@@ -56,9 +56,10 @@ def main(out: str, dataset_dir: str, weights: str | None, model_type: str, train
             models_paths = [str(p) for p in weights_path.rglob("*_*.pth")]
         else:
             models_paths = [str(weights_path)]
-        print(f"Found {len(models_paths)} models: {models_paths}")
+        print(f"Found {len(models_paths)} inisghtface models: {models_paths}")
 
 
+    print(f"Input dataset: {dataset_dir}")
     out_dir = Path(out)
     out_dir.mkdir(exist_ok=True, parents=True)
     out_dir_alligned_images = out_dir / "alligned_images.npy"
@@ -77,8 +78,8 @@ def main(out: str, dataset_dir: str, weights: str | None, model_type: str, train
 
         print("Alligning faces...")
         detector = ufr.FaceDetector()
-        alligned_images, alligned_labels = ufr.allign_faces(images, detector, list(labels), paths)
-        alligned_paths = np.array([str(paths) for paths in paths])
+        alligned_images, alligned_labels, alligned_paths = ufr.allign_faces(images, detector, list(labels), paths)
+        alligned_paths = np.array([str(path) for path in alligned_paths])
 
         print("Saving alligned images...")
         np.save(out_dir_alligned_images, alligned_images)
