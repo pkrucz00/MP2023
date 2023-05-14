@@ -1,6 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import os
+import sys
 import shutil
 import subprocess
 import time
@@ -11,6 +12,7 @@ from random import randint
 
 import click
 import pyautogui
+import pydirectinput
 import pyperclip
 
 MALE_TMP = "male_tmp.txt"
@@ -20,7 +22,7 @@ FEMALE_TMP = "female_tmp.txt"
 def start_game(location):
     # My location C:\Users\pawel\Documents\STUDIA\magisterka\ck3_debug.exe.lnk
     os.startfile(location)
-    time.sleep(30)  #it takes a while until the game starts...
+    time.sleep(20)  #it takes a while until the game starts...
     find_button("locate_pics/main_logo.png", 10)
     
     
@@ -48,20 +50,25 @@ def safe_click(coords, label=""):
     pyautogui.click()
     
 
-def find_button(pic_name, retry_in_sec=1):
+def find_button(pic_name, retry_in_sec=1, max_iter=10):
     confidence = 0.9
     
     button_placement = pyautogui.locateOnScreen(pic_name, confidence=confidence)
-    while not button_placement:
+    i = 0
+    while not button_placement and i < max_iter:
         print(f"{pic_name} not found. Retrying in {retry_in_sec} s.")
         time.sleep(retry_in_sec)
         button_placement = pyautogui.locateOnScreen(pic_name, confidence=confidence)
+        i+=1
     
-    return pyautogui.center(button_placement)
+    return pyautogui.center(button_placement) if i < max_iter else False
 
     
 def find_button_and_click(pic_name, retry_in_sec=1, label=""):
     button_center = find_button(pic_name, retry_in_sec=retry_in_sec)
+    if not button_center: 
+        return
+    
     safe_click(button_center, label=label)
 
 
@@ -75,11 +82,30 @@ def copy_and_save_dna(output_path, copy_button_placement):
     save_dna(pyperclip.paste(), output_path)
         
 
+def activate_ck3_window():
+    title = "Crusader Kings III"
+    ck3_windows = pyautogui.getWindowsWithTitle(title)
+    if ck3_windows:
+        ck3_win = ck3_windows[0]
+        if ck3_win.isActive: return
+        
+        try:
+            ck3_win.activate()
+        except:
+            ck3_win.minimize()
+            ck3_win.maximize()
+            
+    ck3_win.activate()
+    
+    assert pyautogui.getActiveWindow().title == title, f"The {title} is not active"
+
+
 def click_to_the_portrait_mode(): 
-    pyautogui.click()
-    pyautogui.press("`") # close debug panel
-    find_button_and_click('locate_pics/portrait_editor.png', label="Portrait Editor", retry_in_sec=10)
-    pyautogui.press("`")  # close debug panel 
+    activate_ck3_window()
+    print(f"Active window: {pyautogui.getActiveWindow().title}")
+    pydirectinput.press('`')
+    find_button_and_click('locate_pics/portrait_editor.png', label="Portrait Editor", retry_in_sec=0.1)
+    pydirectinput.press("`")  # close debug panel 
 
 
 def stabilize_heads(): #use value "1" in torso state input
@@ -87,20 +113,36 @@ def stabilize_heads(): #use value "1" in torso state input
     pyautogui.write("1")
     
 
-def prepare_initial_dna():
+def copy_text_to_clipboard(path):
+    with open(path, 'r') as file:
+        text = file.read().rstrip('\n')
+    pyperclip.copy(text)
+    print(pyperclip.paste())
+
+
+def prepare_initial_dna(genes_sample):
+    def load_genes():
+        copy_text_to_clipboard(genes_sample)
+        find_button_and_click("locate_pics/paste_persistent_dna.png", label="Paste persistent DNA")
+        
+    load_random = lambda: find_button_and_click("locate_pics/randomize_dna.png", label="Random DNA")
+    
+    if genes_sample:
+        load_genes()
+    else:
+        load_random()
+    
     male_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_male.png")
     female_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_female.png")
     
-    find_button_and_click("locate_pics/randomize_dna.png", label="Random DNA")
     copy_and_save_dna(MALE_TMP, male_copy_dna_pos)
     copy_and_save_dna(FEMALE_TMP, female_copy_dna_pos)
     
-    
        
-def prepare():
+def prepare(genes_sample):
     click_to_the_portrait_mode()
     stabilize_heads()     
-    prepare_initial_dna()        
+    prepare_initial_dna(genes_sample)        
 
 
 def read_lines_of_file(path):
@@ -129,7 +171,6 @@ def modify_value_of_a_gene(line, value):
 
 
 def modify_genes(dna_lines, list_of_genes_to_change):
-    print(list_of_genes_to_change)
     result = []
     for dna_line in dna_lines:
         if any([gene in dna_line for gene in list_of_genes_to_change]):
@@ -171,26 +212,29 @@ def generate_faces_with_gene_limits(n, genes, out):
 
 
 @click.command()
-@click.option("--exec",
+@click.option("--exec", required=True,
               type=click.Path(dir_okay=False, file_okay=True, readable=True, exists=True),
               help="Path to the CK III game. Make sure it is in debug mode.")
-@click.option("--genes",
+@click.option("--gene_list", required=True,
               type=click.Path(dir_okay=False, file_okay=True, exists=True),
               help="File with a list of genes that should be randomized")
-@click.option("-n", default=10, help="Number of output pictures per ethnicity and per sex")
+@click.option("--gene_sample",
+            type=click.Path(dir_okay=False, file_okay=True, exists=True),
+            help="File with a sample for further gene specification. If not specified, random model will be generated.")
+@click.option("-n", default=10, help="Number of output pictures")
 @click.option("--out", type=click.Path(dir_okay=True, file_okay=False),
                 default="results",
                 help="Output folder for generated faces and dna files")
 @click.option("--zip", is_flag=True, default=False, help="Zip the results")
-def main(exec, genes, n, out, zip):
+def main(exec, gene_list, gene_sample, n, out, zip):
     start_game(exec)
-    prepare()
+    prepare(gene_sample)
     
-    list_of_genes = read_lines_of_file(genes)
-    generate_faces_with_gene_limits(n, list_of_genes, out)
+    # list_of_genes = read_lines_of_file(genes)
+    # generate_faces_with_gene_limits(n, list_of_genes, out)
     # delete_tmp_files()
-    if (zip): archive_folder(out)
-    end_game()
+    # if (zip): archive_folder(out)
+    # end_game()
 
 if __name__=="__main__":
     main()
