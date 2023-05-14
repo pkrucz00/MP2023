@@ -38,7 +38,7 @@ def safe_create_path(path: str) -> Path:
 
 def archive_folder(folder_name):
     something = shutil.make_archive(base_name=folder_name, format="zip")
-    print(something)
+    print(f"Results archived and saved in {something}")
     
 
 def safe_click(coords, label=""):
@@ -110,14 +110,13 @@ def click_to_the_portrait_mode():
 
 def stabilize_heads(): #use value "1" in torso state input
     find_button_and_click("locate_pics/torso_state.png", label="Torso_state")
-    pyautogui.write("1")
+    pydirectinput.write("1")
     
 
 def copy_text_to_clipboard(path):
     with open(path, 'r') as file:
         text = file.read().rstrip('\n')
     pyperclip.copy(text)
-    print(pyperclip.paste())
 
 
 def prepare_initial_dna(genes_sample):
@@ -184,7 +183,7 @@ def modify_genes(dna_lines, list_of_genes_to_change):
 
 def screenshot_and_save_face(output_folder, model_name):
     output_path=f"{output_folder}/{model_name}.png"
-    face_region = (666, 315, 280, 430)
+    face_region = (786, 315, 164, 186)
     pyautogui.screenshot(output_path, region=face_region)
 
 
@@ -204,11 +203,16 @@ def generate_face_with_limits(dna, limits, output_folder):
 def generate_faces_with_gene_limits(n, genes, out):
     male_dna = read_lines_of_file(MALE_TMP)
     female_dna = read_lines_of_file(FEMALE_TMP)
+    result_folder = safe_create_path(out)
     
     for _ in range(n):
-        generate_face_with_limits(male_dna, genes, out)
-        generate_face_with_limits(female_dna, genes, out)
+        generate_face_with_limits(male_dna, genes, result_folder)
+        generate_face_with_limits(female_dna, genes, result_folder)
 
+
+def delete_tmp_files():
+    os.remove(MALE_TMP)
+    os.remove(FEMALE_TMP)
 
 
 @click.command()
@@ -230,11 +234,11 @@ def main(exec, gene_list, gene_sample, n, out, zip):
     start_game(exec)
     prepare(gene_sample)
     
-    # list_of_genes = read_lines_of_file(genes)
-    # generate_faces_with_gene_limits(n, list_of_genes, out)
-    # delete_tmp_files()
-    # if (zip): archive_folder(out)
-    # end_game()
+    list_of_genes = read_lines_of_file(gene_list)
+    generate_faces_with_gene_limits(n, list_of_genes, out)
+    delete_tmp_files()
+    if (zip): archive_folder(out)
+    end_game()
 
 if __name__=="__main__":
     main()
