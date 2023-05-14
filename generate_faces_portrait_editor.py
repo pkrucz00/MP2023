@@ -172,11 +172,10 @@ def modify_value_of_a_gene(line, value):
      return " ".join(splitted_line)
 
 
-def modify_genes(dna_lines, list_of_genes_to_change):
+def modify_gene(dna_lines, new_gene_value, gene):
     result = []
     for dna_line in dna_lines:
-        if any([gene in dna_line for gene in list_of_genes_to_change]):
-            new_gene_value = randint(0,255)
+        if gene in dna_line:
             dna_line = modify_value_of_a_gene(dna_line, new_gene_value)
             print(dna_line)
         
@@ -195,27 +194,34 @@ def copy_and_save_model(dna, model_name, output_folder):
     screenshot_and_save_face(output_folder, model_name)    
     
     
-def generate_face_with_limits(dna, limits, output_folder, sex):
-    modified_genes = modify_genes(dna, limits)
+def generate_face_with_limits(dna, val, gene, output_folder, sex):
+    modified_genes = modify_gene(dna, val, gene)
     pyperclip.copy(modified_genes)
-    model_name = f"{sex}{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
+    model_name = f"{sex}-{gene}-{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
     find_button_and_click("locate_pics/paste_persistent_dna.png", 0.1, "paste dna")
     copy_and_save_model(modified_genes, model_name, output_folder)
 
-
-def generate_faces_with_gene_limits(n, genes, out):
+def generate_faces_with_gene_limits(n, genes, out, val_range):
     male_dna = read_lines_of_file(MALE_TMP)
     female_dna = read_lines_of_file(FEMALE_TMP)
     result_folder = safe_create_path(out)
+    (val_from, val_to) = val_range
     
-    for _ in range(n):
-        generate_face_with_limits(male_dna, genes, result_folder, "m")
-        generate_face_with_limits(female_dna, genes, result_folder, "f")
+    for gene in genes:
+        for _ in range(n):
+            for val in range(val_from, val_to + 1):
+                if val == -1: val = randint(0, 255)
+                
+                generate_face_with_limits(male_dna, val, gene, result_folder, "m")
+                generate_face_with_limits(female_dna, val, gene, result_folder, "f")
 
 
 def delete_tmp_files():
     os.remove(MALE_TMP)
     os.remove(FEMALE_TMP)
+
+def invalid_range(val_range):
+    return not (0 <= val_range[0] <= 255) or not (0 <= val_range[1] <= 255)
 
 
 @click.command()
@@ -229,16 +235,19 @@ def delete_tmp_files():
             type=click.Path(dir_okay=False, file_okay=True, exists=True),
             help="File with a sample for further gene specification. If not specified, random model will be generated.")
 @click.option("-n", default=10, help="Number of output pictures")
+@click.option("--val_range", type=(int, int), default=(-1,-1), help="Range of parameters value")
 @click.option("--out", type=click.Path(dir_okay=True, file_okay=False),
                 default="results",
                 help="Output folder for generated faces and dna files")
 @click.option("--zip", is_flag=True, default=False, help="Zip the results")
-def main(exec, gene_list, gene_sample, n, out, zip):
-    start_game(exec)
-    prepare(gene_sample)
+def main(exec, gene_list, gene_sample, n, val_range, out, zip):
+    if not val_range == (-1, -1) and invalid_range(val_range): raise Exception("Invalid range")
+     
+    # start_game(exec)
+    # prepare(gene_sample)
     
     list_of_genes = read_lines_of_file(gene_list)
-    generate_faces_with_gene_limits(n, list_of_genes, out)
+    generate_faces_with_gene_limits(n, list_of_genes, out, val_range)
     delete_tmp_files()
     if (zip): archive_folder(out)
     end_game()

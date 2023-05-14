@@ -1,2 +1,0 @@
-gene_eye_depth
-gene_bs_cheek_height

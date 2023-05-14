@@ -1,0 +1,10 @@
+gene_forehead_height
+gene_head_height
+gene_head_width
+gene_head_profile
+gene_head_top_height
+gene_head_top_width
+gene_jaw_angle
+gene_jaw_forward
+gene_jaw_height
+gene_jaw_width
