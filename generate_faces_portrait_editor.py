@@ -51,7 +51,7 @@ def safe_click(coords, label=""):
     
 
 def find_button(pic_name, retry_in_sec=1, max_iter=10):
-    confidence = 0.9
+    confidence = 0.95
     
     button_placement = pyautogui.locateOnScreen(pic_name, confidence=confidence)
     i = 0
@@ -134,6 +134,9 @@ def prepare_initial_dna(genes_sample):
     male_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_male.png")
     female_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_female.png")
     
+    print(f"male {male_copy_dna_pos}")
+    print(f"female {female_copy_dna_pos}")
+    
     copy_and_save_dna(MALE_TMP, male_copy_dna_pos)
     copy_and_save_dna(FEMALE_TMP, female_copy_dna_pos)
     
@@ -183,7 +186,7 @@ def modify_genes(dna_lines, list_of_genes_to_change):
 
 def screenshot_and_save_face(output_folder, model_name):
     output_path=f"{output_folder}/{model_name}.png"
-    face_region = (786, 315, 164, 186)
+    face_region = (786, 315, 164, 186) if "m" in model_name else (1310, 315, 164, 186)
     pyautogui.screenshot(output_path, region=face_region)
 
 
@@ -192,10 +195,10 @@ def copy_and_save_model(dna, model_name, output_folder):
     screenshot_and_save_face(output_folder, model_name)    
     
     
-def generate_face_with_limits(dna, limits, output_folder):
+def generate_face_with_limits(dna, limits, output_folder, sex):
     modified_genes = modify_genes(dna, limits)
     pyperclip.copy(modified_genes)
-    model_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
+    model_name = f"{sex}{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
     find_button_and_click("locate_pics/paste_persistent_dna.png", 0.1, "paste dna")
     copy_and_save_model(modified_genes, model_name, output_folder)
 
@@ -206,8 +209,8 @@ def generate_faces_with_gene_limits(n, genes, out):
     result_folder = safe_create_path(out)
     
     for _ in range(n):
-        generate_face_with_limits(male_dna, genes, result_folder)
-        generate_face_with_limits(female_dna, genes, result_folder)
+        generate_face_with_limits(male_dna, genes, result_folder, "m")
+        generate_face_with_limits(female_dna, genes, result_folder, "f")
 
 
 def delete_tmp_files():
