@@ -243,8 +243,8 @@ def invalid_range(val_range):
 def main(exec, gene_list, gene_sample, n, val_range, out, zip):
     if not val_range == (-1, -1) and invalid_range(val_range): raise Exception("Invalid range")
      
-    # start_game(exec)
-    # prepare(gene_sample)
+    start_game(exec)
+    prepare(gene_sample)
     
     list_of_genes = read_lines_of_file(gene_list)
     generate_faces_with_gene_limits(n, list_of_genes, out, val_range)
