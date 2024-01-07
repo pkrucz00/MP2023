@@ -8,7 +8,6 @@ import time
 
 from datetime import datetime
 from pathlib import Path
-from random import randint
 
 import click
 import pyautogui
@@ -18,11 +17,13 @@ import pyperclip
 MALE_TMP = "male_tmp.txt"
 # FEMALE_TMP = "female_tmp.txt"
 
+GAME_PATH = Path(r"C:\Users\pawel\Documents\STUDIA\magisterka\ck3_debug.exe.lnk")
 
 def start_game(location):
-    # My location C:\Users\pawel\Documents\STUDIA\magisterka\ck3_debug.exe.lnk
+    location = location if location else GAME_PATH
+    
     os.startfile(location)
-    time.sleep(20)  #it takes a while until the game starts...
+    time.sleep(30)  #it takes a while until the game starts...
     find_button("locate_pics/main_logo.png", 10)
     
     
@@ -79,7 +80,9 @@ def save_dna(dna_text, out_path):
 
 def copy_and_save_dna(output_path, copy_button_placement):
     safe_click(copy_button_placement)
-    save_dna(pyperclip.paste(), output_path)
+    dna_to_save = pyperclip.paste()
+    print(f"Dna to save: {dna_to_save}")
+    save_dna(dna_to_save, output_path)
         
 
 def activate_ck3_window():
@@ -96,8 +99,10 @@ def activate_ck3_window():
             ck3_win.maximize()
             
     ck3_win.activate()
+    active_window = pyautogui.getActiveWindow()
     
-    assert pyautogui.getActiveWindow().title == title, f"The {title} is not active"
+    assert active_window, "No active window. Activation of CK III window failed"
+    assert active_window.title == title, f"The {title} is not active"
 
 
 def click_to_the_portrait_mode(): 
@@ -108,9 +113,11 @@ def click_to_the_portrait_mode():
     pydirectinput.press("`")  # close debug panel 
 
 
-def stabilize_heads(): #use value "1" in torso state input
-    find_button_and_click("locate_pics/torso_state.png", label="Torso_state")
-    pydirectinput.write("1")
+def stabilize_heads(button_coords): #use value "1" in torso state input
+    # find_button_and_click("locate_pics/torso_state.png", label="Torso_state")
+    safe_click(button_coords, label="Click 1 on torso state")
+    pydirectinput.press("backspace")
+    pydirectinput.press("1")
     
 
 def copy_text_to_clipboard(path):
@@ -131,19 +138,19 @@ def prepare_initial_dna(genes_sample):
     else:
         load_random()
     
+    time.sleep(1)
     male_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_male.png")
     # female_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_female.png")
     
     print(f"male {male_copy_dna_pos}")
     # print(f"female {female_copy_dna_pos}")
-    
+    time.sleep(1)
     copy_and_save_dna(MALE_TMP, male_copy_dna_pos)
     # copy_and_save_dna(FEMALE_TMP, female_copy_dna_pos)
-    
        
 def prepare(genes_sample):
     click_to_the_portrait_mode()
-    stabilize_heads()     
+    stabilize_heads(find_button("locate_pics/torso_state.png"))     
     prepare_initial_dna(genes_sample)        
 
 
@@ -186,58 +193,61 @@ def modify_gene(dna_lines, new_gene_value, gene):
     return result
 
 
-def screenshot_and_save_face(output_folder, model_name):
+def screenshot_and_save_face(output_folder, model_name, stabilize_button_coords):
     output_path=f"{output_folder}/{model_name}.png"
+    stabilize_heads(stabilize_button_coords)
     face_region = (786, 315, 164, 186) if "m" in model_name else (1310, 315, 164, 186)
     pyautogui.screenshot(output_path, region=face_region)
 
 
-def copy_and_save_model(dna, model_name, output_folder):
+def copy_and_save_model(dna, model_name, output_folder, stabilize_button_coords):
     save_dna(dna, f"{output_folder}/{model_name}.txt")
-    screenshot_and_save_face(output_folder, model_name)    
+    screenshot_and_save_face(output_folder, model_name, stabilize_button_coords)    
     
     
-def generate_face_with_limits(dna, val_range, genes, output_folder, sex):
-    val_from, val_to = val_range
+def generate_face_with_limits(dna, val_range, genes, output_folder, sex, button_coords, stabilize_button_coords):
+    val_from, val_to, val_step = val_range
     
     if len(genes) == 1:
         gene = genes[0]
-        for val in range(val_from, val_to + 1, 32):
+        for val in range(val_from, val_to + 1, val_step):
             modified_dna_lines = modify_gene(dna, val, gene)
             modified_genes = "".join(modified_dna_lines)
             pyperclip.copy(modified_genes)
+            
             model_name = f"{sex}-{gene}-{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
-            find_button_and_click("locate_pics/paste_persistent_dna.png", 0.1, "paste dna")
-            copy_and_save_model(modified_genes, model_name, output_folder)
+            safe_click(button_coords, "paste dna")
+            copy_and_save_model(modified_genes, model_name, output_folder, stabilize_button_coords)
         return
     
     gene = genes.pop()
-    for val in range(val_from, val_to + 1, 32):
+    for val in range(val_from, val_to + 1, val_step):
         modified_dna_lines = modify_gene(dna, val, gene)
         out = safe_create_path(f"{output_folder}/{gene}_{val}")
-        generate_face_with_limits(modified_dna_lines, val_range, genes[:], out, sex)
+        generate_face_with_limits(modified_dna_lines, val_range, genes[:], out, sex, button_coords, stabilize_button_coords)
 
 
 def generate_faces_with_gene_limits(n, genes, out, val_range):
     male_dna_lines = read_lines_of_file(MALE_TMP)
     # female_dna = read_lines_of_file(FEMALE_TMP)
     result_folder = safe_create_path(out)
+    button_coords = find_button("locate_pics/paste_persistent_dna.png", 0.1)
+    stabilize_button_coords = find_button("locate_pics/torso_state.png")
     
+    t1 = time.time()
     for _ in range(n):
-        generate_face_with_limits(male_dna_lines, val_range, genes, result_folder, "m")
+        generate_face_with_limits(male_dna_lines, val_range, genes, result_folder, "m", button_coords, stabilize_button_coords)
+    
         # generate_face_with_limits(female_dna, val, gene, result_folder, "f")
-
+    print(f"Done in {time.time() - t1} [s]")
 
 def delete_tmp_files():
     os.remove(MALE_TMP)
     # os.remove(FEMALE_TMP)
-
-def invalid_range(val_range):
-    return not (0 <= val_range[0] <= 255) or not (0 <= val_range[1] <= 255)
-
+    
 
 @click.command()
-@click.option("--exec", required=True,
+@click.option("--exec",
               type=click.Path(dir_okay=False, file_okay=True, readable=True, exists=True),
               help="Path to the CK III game. Make sure it is in debug mode.")
 @click.option("--gene_list", required=True,
@@ -247,14 +257,12 @@ def invalid_range(val_range):
             type=click.Path(dir_okay=False, file_okay=True, exists=True),
             help="File with a sample for further gene specification. If not specified, random model will be generated.")
 @click.option("-n", default=10, help="Number of output pictures")
-@click.option("--val_range", type=(int, int), default=(-1,-1), help="Range of parameters value")
+@click.option("--val_range", type=(int, int, int), default=(0, 255, 32), help="Range of parameters value")
 @click.option("--out", type=click.Path(dir_okay=True, file_okay=False),
                 default="results",
                 help="Output folder for generated faces and dna files")
 @click.option("--zip", is_flag=True, default=False, help="Zip the results")
-def main(exec, gene_list, gene_sample, n, val_range, out, zip):
-    if not val_range == (-1, -1) and invalid_range(val_range): raise Exception("Invalid range")
-     
+def main(exec, gene_list, gene_sample, n, val_range, out, zip): 
     start_game(exec)
     prepare(gene_sample)
     
@@ -264,6 +272,7 @@ def main(exec, gene_list, gene_sample, n, val_range, out, zip):
     delete_tmp_files()
     if (zip): archive_folder(out)
     end_game()
+
 
 if __name__=="__main__":
     main()
