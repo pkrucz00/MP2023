@@ -16,7 +16,7 @@ import pydirectinput
 import pyperclip
 
 MALE_TMP = "male_tmp.txt"
-FEMALE_TMP = "female_tmp.txt"
+# FEMALE_TMP = "female_tmp.txt"
 
 
 def start_game(location):
@@ -132,13 +132,13 @@ def prepare_initial_dna(genes_sample):
         load_random()
     
     male_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_male.png")
-    female_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_female.png")
+    # female_copy_dna_pos = find_button("locate_pics/copy_persistent_dna_female.png")
     
     print(f"male {male_copy_dna_pos}")
-    print(f"female {female_copy_dna_pos}")
+    # print(f"female {female_copy_dna_pos}")
     
     copy_and_save_dna(MALE_TMP, male_copy_dna_pos)
-    copy_and_save_dna(FEMALE_TMP, female_copy_dna_pos)
+    # copy_and_save_dna(FEMALE_TMP, female_copy_dna_pos)
     
        
 def prepare(genes_sample):
@@ -149,7 +149,7 @@ def prepare(genes_sample):
 
 def read_lines_of_file(path):
     with open(path, "r", encoding="UTF-8") as file:
-        return [line.strip("\n") for line in file.readlines()]
+        return [line for line in file.readlines()]
 
 
 """
@@ -168,19 +168,22 @@ Elements in line after split:
 def modify_value_of_a_gene(line, value):
      DOM_GENE_VAL_POS = 2
      splitted_line = line.split()
-     splitted_line[DOM_GENE_VAL_POS] = str(value) 
-     return " ".join(splitted_line)
-
+     splitted_line[DOM_GENE_VAL_POS] = str(value)
+     result =  " ".join(splitted_line)
+     return result
 
 def modify_gene(dna_lines, new_gene_value, gene):
     result = []
+    found = False
     for dna_line in dna_lines:
         if gene in dna_line:
+            found = True
             dna_line = modify_value_of_a_gene(dna_line, new_gene_value)
-            print(dna_line)
-        
+            print(f"Modifying gene {gene} to {new_gene_value}")
+            
         result.append(dna_line)
-    return "\n".join(result)
+    if not found: print(f"[WARNING] {gene} not found in dna list (value: {new_gene_value})")
+    return result
 
 
 def screenshot_and_save_face(output_folder, model_name):
@@ -194,31 +197,40 @@ def copy_and_save_model(dna, model_name, output_folder):
     screenshot_and_save_face(output_folder, model_name)    
     
     
-def generate_face_with_limits(dna, val, gene, output_folder, sex):
-    modified_genes = modify_gene(dna, val, gene)
-    pyperclip.copy(modified_genes)
-    model_name = f"{sex}-{gene}-{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
-    find_button_and_click("locate_pics/paste_persistent_dna.png", 0.1, "paste dna")
-    copy_and_save_model(modified_genes, model_name, output_folder)
+def generate_face_with_limits(dna, val_range, genes, output_folder, sex):
+    val_from, val_to = val_range
+    
+    if len(genes) == 1:
+        gene = genes[0]
+        for val in range(val_from, val_to + 1, 32):
+            modified_dna_lines = modify_gene(dna, val, gene)
+            modified_genes = "".join(modified_dna_lines)
+            pyperclip.copy(modified_genes)
+            model_name = f"{sex}-{gene}-{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
+            find_button_and_click("locate_pics/paste_persistent_dna.png", 0.1, "paste dna")
+            copy_and_save_model(modified_genes, model_name, output_folder)
+        return
+    
+    gene = genes.pop()
+    for val in range(val_from, val_to + 1, 32):
+        modified_dna_lines = modify_gene(dna, val, gene)
+        out = safe_create_path(f"{output_folder}/{gene}_{val}")
+        generate_face_with_limits(modified_dna_lines, val_range, genes[:], out, sex)
+
 
 def generate_faces_with_gene_limits(n, genes, out, val_range):
-    male_dna = read_lines_of_file(MALE_TMP)
-    female_dna = read_lines_of_file(FEMALE_TMP)
+    male_dna_lines = read_lines_of_file(MALE_TMP)
+    # female_dna = read_lines_of_file(FEMALE_TMP)
     result_folder = safe_create_path(out)
-    (val_from, val_to) = val_range
     
-    for gene in genes:
-        for _ in range(n):
-            for val in range(val_from, val_to + 1):
-                if val == -1: val = randint(0, 255)
-                
-                generate_face_with_limits(male_dna, val, gene, result_folder, "m")
-                generate_face_with_limits(female_dna, val, gene, result_folder, "f")
+    for _ in range(n):
+        generate_face_with_limits(male_dna_lines, val_range, genes, result_folder, "m")
+        # generate_face_with_limits(female_dna, val, gene, result_folder, "f")
 
 
 def delete_tmp_files():
     os.remove(MALE_TMP)
-    os.remove(FEMALE_TMP)
+    # os.remove(FEMALE_TMP)
 
 def invalid_range(val_range):
     return not (0 <= val_range[0] <= 255) or not (0 <= val_range[1] <= 255)
@@ -247,6 +259,7 @@ def main(exec, gene_list, gene_sample, n, val_range, out, zip):
     prepare(gene_sample)
     
     list_of_genes = read_lines_of_file(gene_list)
+    list_of_genes = [s.strip() for s in list_of_genes]
     generate_faces_with_gene_limits(n, list_of_genes, out, val_range)
     delete_tmp_files()
     if (zip): archive_folder(out)
