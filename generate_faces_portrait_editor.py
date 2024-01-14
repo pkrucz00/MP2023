@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 import os
-import sys
 import shutil
 import subprocess
 import time
+
+import numpy as np
+from scipy.stats import t
 
 from datetime import datetime
 from pathlib import Path
@@ -116,7 +118,7 @@ def click_to_the_portrait_mode():
 def stabilize_heads(button_coords): #use value "1" in torso state input
     # find_button_and_click("locate_pics/torso_state.png", label="Torso_state")
     safe_click(button_coords, label="Click 1 on torso state")
-    pydirectinput.press("backspace")
+    # pydirectinput.press("backspace")
     pydirectinput.press("1")
     
 
@@ -195,8 +197,8 @@ def modify_gene(dna_lines, new_gene_value, gene):
 
 def screenshot_and_save_face(output_folder, model_name, stabilize_button_coords):
     output_path=f"{output_folder}/{model_name}.png"
-    stabilize_heads(stabilize_button_coords)
     face_region = (786, 315, 164, 186) if "m" in model_name else (1310, 315, 164, 186)
+    # stabilize_heads(stabilize_button_coords)
     pyautogui.screenshot(output_path, region=face_region)
 
 
@@ -206,28 +208,37 @@ def copy_and_save_model(dna, model_name, output_folder, stabilize_button_coords)
     
     
 def generate_face_with_limits(dna, val_range, genes, output_folder, sex, button_coords, stabilize_button_coords):
-    val_from, val_to, val_step = val_range
-    
     if len(genes) == 1:
         gene = genes[0]
-        for val in range(val_from, val_to + 1, val_step):
+        for val in val_range:
             modified_dna_lines = modify_gene(dna, val, gene)
             modified_genes = "".join(modified_dna_lines)
             pyperclip.copy(modified_genes)
             
             model_name = f"{sex}-{gene}-{datetime.now().strftime('%Y%m%d_%H%M%S%f')}"
             safe_click(button_coords, "paste dna")
+            time.sleep(0.05)
             copy_and_save_model(modified_genes, model_name, output_folder, stabilize_button_coords)
         return
     
     gene = genes.pop()
-    for val in range(val_from, val_to + 1, val_step):
+    for val in val_range:
         modified_dna_lines = modify_gene(dna, val, gene)
         out = safe_create_path(f"{output_folder}/{gene}_{val}")
         generate_face_with_limits(modified_dna_lines, val_range, genes[:], out, sex, button_coords, stabilize_button_coords)
 
+def create_range(val_range, n_buckets, gaussian):
+    a, b = val_range
+    mean, std = (b - a)/2, 64
+    
+    break_points_uniform = np.linspace(0, 1, n_buckets + 2)[1:-1]
+    print(break_points_uniform)
+    break_points = t.ppf(break_points_uniform, df=n_buckets-1, loc=mean, scale=std) \
+        if gaussian else 2*mean*break_points_uniform
+    return np.rint(break_points)
 
-def generate_faces_with_gene_limits(n, genes, out, val_range):
+
+def generate_faces_with_gene_limits(n, genes, out, val_range, n_buckets, gaussian):
     male_dna_lines = read_lines_of_file(MALE_TMP)
     # female_dna = read_lines_of_file(FEMALE_TMP)
     result_folder = safe_create_path(out)
@@ -235,8 +246,9 @@ def generate_faces_with_gene_limits(n, genes, out, val_range):
     stabilize_button_coords = find_button("locate_pics/torso_state.png")
     
     t1 = time.time()
+    values_range = create_range(val_range, n_buckets, gaussian)
     for _ in range(n):
-        generate_face_with_limits(male_dna_lines, val_range, genes, result_folder, "m", button_coords, stabilize_button_coords)
+        generate_face_with_limits(male_dna_lines, values_range, genes, result_folder, "m", button_coords, stabilize_button_coords)
     
         # generate_face_with_limits(female_dna, val, gene, result_folder, "f")
     print(f"Done in {time.time() - t1} [s]")
@@ -257,22 +269,23 @@ def delete_tmp_files():
             type=click.Path(dir_okay=False, file_okay=True, exists=True),
             help="File with a sample for further gene specification. If not specified, random model will be generated.")
 @click.option("-n", default=10, help="Number of output pictures")
-@click.option("--val_range", type=(int, int, int), default=(0, 255, 32), help="Range of parameters value")
+@click.option("--val_range", type=(int, int), default=(0, 255), help="Range of parameters value")
+@click.option("--n_buckets", default=8, help="Number of sampled faces per gene")
 @click.option("--out", type=click.Path(dir_okay=True, file_okay=False),
                 default="results",
                 help="Output folder for generated faces and dna files")
+@click.option("--gaussian_t", is_flag=True, default=False, help="Step by t student with std=64")
 @click.option("--zip", is_flag=True, default=False, help="Zip the results")
-def main(exec, gene_list, gene_sample, n, val_range, out, zip): 
+def main(exec, gene_list, gene_sample, n, val_range, n_buckets, out, gaussian_t, zip): 
     start_game(exec)
     prepare(gene_sample)
     
     list_of_genes = read_lines_of_file(gene_list)
     list_of_genes = [s.strip() for s in list_of_genes]
-    generate_faces_with_gene_limits(n, list_of_genes, out, val_range)
+    generate_faces_with_gene_limits(n, list_of_genes, out, val_range, n_buckets, gaussian_t)
     delete_tmp_files()
     if (zip): archive_folder(out)
     end_game()
-
 
 if __name__=="__main__":
     main()
